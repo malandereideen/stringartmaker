@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>stringartmaker · makr.tools</title>
+    <link rel="stylesheet" href="fonts/fonts.css">
+    <link rel="stylesheet" href="brand.css">
+    <style>
+        :root {
+            /* Tool-Farben auf das makr.tools-Design-System gemappt */
+            --bg-color: var(--bg);
+            --panel-color: var(--surface);
+            --text-color: var(--text);
+            --accent-color: var(--blue);
+            --danger-color: #e5484d;
+            --border-color: var(--border);
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .app-shell { display: flex; flex: 1; min-height: 0; }
+
+        /* --- SIDEBAR --- */
+        .sidebar {
+            width: 320px;
+            background-color: var(--panel-color);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            border-right: 1px solid var(--border-color);
+            box-shadow: 2px 0 5px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        h2, h3 { margin-top: 0; margin-bottom: 10px; font-weight: 300; }
+        
+        .control-group {
+            background: var(--surface-2);
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+        }
+
+        label { display: block; font-size: 0.85em; margin-bottom: 5px; color: var(--text-muted); }
+
+        input[type="number"], input[type="color"], input[type="range"] {
+            width: 100%;
+            padding: 5px;
+            background: var(--surface);
+            border: 1px solid var(--border-strong);
+            color: var(--text);
+            border-radius: 3px;
+            box-sizing: border-box;
+        }
+
+        /* Tools Buttons */
+        .tools {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+        }
+
+        button {
+            padding: 10px;
+            background: var(--surface-2);
+            border: none;
+            color: var(--text);
+            cursor: pointer;
+            border-radius: 3px;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        button:hover { background: var(--border); }
+        button:active { transform: translateY(1px); }
+        button { font-family: inherit; }
+        button.active { background: var(--accent-color); font-weight: 600; box-shadow: 0 0 0 2px var(--blue-tint); }
+        button.danger { background: #7a2b2b; }
+        button.action { background: var(--blue); margin-top: 5px; width: 100%; }
+        button.action.export { background: var(--orange); color: var(--on-orange); }
+        button.action.export:hover { background: var(--orange-deep); }
+
+        /* Yarn List (Legend) */
+        #yarn-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .yarn-item {
+            display: flex;
+            align-items: center;
+            padding: 5px;
+            background: var(--surface-2);
+            margin-bottom: 5px;
+            border-radius: 3px;
+            font-size: 0.9em;
+            cursor: pointer;
+        }
+        .yarn-item:hover { background: var(--border); }
+        .yarn-color-box {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 10px;
+            border: 1px solid var(--surface);
+        }
+        .yarn-count {
+            margin-left: auto;
+            background: var(--bg);
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.8em;
+            color: var(--text-muted);
+        }
+
+        /* --- WORKSPACE --- */
+        .workspace {
+            flex: 1;
+            overflow: scroll; /* Allows scrolling when zoomed */
+            background-color: #111;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* Grid background for workspace context */
+            background-image: linear-gradient(#222 1px, transparent 1px), linear-gradient(90deg, #222 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        /* Transformations Container */
+        #zoom-container {
+            padding: 50px; /* Padding to ensure edges are accessible */
+            transform-origin: center center;
+            transition: transform 0.1s ease-out;
+        }
+
+        /* The Board */
+        #art-board-container {
+            box-shadow: 0 0 30px rgba(0,0,0,1);
+            background-color: #1a1a1a; /* Board Color */
+            position: relative;
+        }
+
+        svg {
+            display: block;
+            cursor: crosshair;
+        }
+
+        /* SVG Elements */
+        .grid-line { stroke: #333; stroke-width: 0.5; pointer-events: none; }
+        
+        .nail { fill: #d4af37; stroke: #8a7122; stroke-width: 1; transition: r 0.1s; }
+        .nail:hover { fill: #fff; cursor: pointer; }
+        
+        .ghost-nail { fill: rgba(255, 255, 255, 0.5); pointer-events: none; }
+
+        .string-line { stroke-linecap: round; opacity: 0.9; pointer-events: stroke; }
+        .string-line:hover { stroke-width: 4px !important; opacity: 1; cursor: pointer; stroke: #fff; }
+        
+        .preview-line { stroke-dasharray: 4,4; opacity: 0.6; pointer-events: none; }
+
+        /* Modal */
+        #plan-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: var(--panel-color);
+            width: 800px;
+            max-width: 90%;
+            height: 80%;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        .modal-body {
+            flex: 1;
+            overflow-y: auto;
+            font-family: var(--font-mono);
+            white-space: pre-wrap;
+            background: var(--bg);
+            padding: 15px;
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        /* Helper Text */
+        #hint-text { color: var(--accent-color); font-size: 0.9em; min-height: 1.2em; }
+    </style>
+</head>
+<body>
+
+<header class="brand-header">
+    <a class="wordmark" href="https://makr.tools/">
+        <span class="mark" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 16 9 5 9-5"/><path d="m3 12 9 5 9-5"/></svg></span>
+        makr<span class="dot">.</span>tools
+    </a>
+    <nav class="brand-nav">
+        <span class="badge badge--live">stringartmaker</span>
+        <button class="btn" id="mkr-theme" type="button" aria-label="Hell/Dunkel umschalten" title="Hell/Dunkel umschalten" style="padding:6px 10px; line-height:1;">☾</button>
+    </nav>
+</header>
+<script>
+    (function () {
+        var root = document.documentElement, KEY = 'mkr-theme';
+        var q = new URLSearchParams(location.search).get('theme');
+        var saved = q || localStorage.getItem(KEY);
+        if (saved) root.dataset.theme = saved;
+        var btn = document.getElementById('mkr-theme');
+        function sync() { btn.textContent = root.dataset.theme === 'dark' ? '☾' : '☀'; }
+        sync();
+        btn.addEventListener('click', function () {
+            root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+            localStorage.setItem(KEY, root.dataset.theme);
+            sync();
+        });
+    })();
+</script>
+
+<div class="app-shell">
+
+<div class="sidebar">
+    <h2>stringartmaker</h2>
+    
+    <div class="control-group">
+        <h3>Brett & Raster (mm)</h3>
+        <label>Breite (mm)</label>
+        <input type="number" id="boardWidth" value="300" onchange="updateBoardSettings()">
+        <label>Höhe (mm)</label>
+        <input type="number" id="boardHeight" value="300" onchange="updateBoardSettings()">
+        <label>Rasterabstand (mm)</label>
+        <input type="number" id="gridSize" value="10" onchange="updateBoardSettings()">
+    </div>
+
+    <div class="control-group">
+        <h3>Ansicht</h3>
+        <label>Zoom (<span id="zoom-val">100%</span>)</label>
+        <input type="range" id="zoomSlider" min="0.5" max="3.0" step="0.1" value="1.0" oninput="updateZoom(this.value)">
+    </div>
+
+    <div class="control-group">
+        <h3>Werkzeuge</h3>
+        <div class="tools">
+            <button id="btn-nail" class="active" onclick="setTool('nail')">🔨 Nagel</button>
+            <button id="btn-string" onclick="setTool('string')">🧵 Garn</button>
+            <button id="btn-delete" class="danger" onclick="setTool('delete')">❌ Löschen</button>
+        </div>
+        
+        <div id="color-picker-container" style="margin-top: 15px; display: none;">
+            <label>Aktuelle Garnfarbe</label>
+            <input type="color" id="stringColor" value="#ff0000" onchange="updateCurrentColor(this.value)">
+        </div>
+        
+        <p style="margin-top: 10px;"><span id="hint-text"></span></p>
+    </div>
+
+    <div class="control-group">
+        <h3>Verwendete Garne</h3>
+        <ul id="yarn-list">
+            <!-- Liste wird per JS gefüllt -->
+            <li style="font-size: 0.8em; color: #777; text-align: center;">Noch keine Fäden gezogen.</li>
+        </ul>
+    </div>
+
+    <div class="control-group" style="margin-top: auto;">
+        <h3>Datei & Export</h3>
+        <button class="action" onclick="saveProject()">💾 Projekt speichern</button>
+        <button class="action" onclick="document.getElementById('file-upload').click()">📂 Projekt laden</button>
+        <input type="file" id="file-upload" style="display: none" accept=".json" onchange="loadProject(this)">
+        <div style="height: 10px;"></div>
+        <button class="action export" onclick="exportSVG()">🖼️ SVG Export</button>
+        <button class="action" style="background:var(--surface-2); color:var(--text)" onclick="generatePlan()">📝 Bauplan (Text)</button>
+    </div>
+</div>
+
+<div class="workspace" id="workspace">
+    <div id="zoom-container">
+        <div id="art-board-container">
+            <svg id="art-canvas" xmlns="http://www.w3.org/2000/svg">
+                <!-- Layers ordered by z-index -->
+                <g id="layer-grid"></g>
+                <g id="layer-strings"></g>
+                <g id="layer-preview-lines"></g>
+                <g id="layer-nails"></g>
+                <g id="layer-ghost"></g> <!-- Preview for nail snap -->
+            </svg>
+        </div>
+    </div>
+</div>
+
+</div><!-- /app-shell -->
+
+<!-- Modal for Plan Output -->
+<div id="plan-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Bauplan & Anleitung</h3>
+            <button onclick="document.getElementById('plan-modal').style.display='none'" class="danger" style="width: auto;">Schließen</button>
+        </div>
+        <div class="modal-body" id="plan-text"></div>
+        <div style="margin-top: 10px; text-align: right;">
+            <button class="action" style="width: auto;" onclick="copyPlan()">In Zwischenablage kopieren</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- State Management ---
+    const state = {
+        board: { width: 300, height: 300, grid: 10 }, // mm
+        scale: 2, // pixels per mm (internal resolution)
+        zoom: 1.0, // view scaling
+        nails: [], // { id, x, y } (mm)
+        strings: [], // { id, from: nailId, to: nailId, color }
+        tool: 'nail',
+        activeStringStart: null, 
+        currentColor: '#ff0000',
+        nailIdCounter: 1,
+        stringIdCounter: 1
+    };
+
+    // --- DOM Elements ---
+    const canvas = document.getElementById('art-canvas');
+    const container = document.getElementById('art-board-container');
+    const layerGrid = document.getElementById('layer-grid');
+    const layerNails = document.getElementById('layer-nails');
+    const layerStrings = document.getElementById('layer-strings');
+    const layerPreviewLines = document.getElementById('layer-preview-lines');
+    const layerGhost = document.getElementById('layer-ghost');
+    const yarnList = document.getElementById('yarn-list');
+
+    // --- Initialization ---
+    function init() {
+        updateBoardSettings();
+        setTool('nail');
+        
+        // Use the container for events to handle snaps better
+        container.addEventListener('mousemove', handleMouseMove);
+        container.addEventListener('click', handleBoardClick);
+        container.addEventListener('mousedown', (e) => e.preventDefault()); // prevent text selection
+    }
+
+    // --- Core Logic ---
+
+    function updateBoardSettings() {
+        state.board.width = parseInt(document.getElementById('boardWidth').value) || 300;
+        state.board.height = parseInt(document.getElementById('boardHeight').value) || 300;
+        state.board.grid = parseInt(document.getElementById('gridSize').value) || 10;
+
+        const pxWidth = state.board.width * state.scale;
+        const pxHeight = state.board.height * state.scale;
+
+        container.style.width = pxWidth + 'px';
+        container.style.height = pxHeight + 'px';
+        canvas.setAttribute('width', pxWidth);
+        canvas.setAttribute('height', pxHeight);
+        canvas.setAttribute('viewBox', `0 0 ${state.board.width} ${state.board.height}`);
+
+        drawGrid();
+    }
+
+    function updateZoom(val) {
+        state.zoom = parseFloat(val);
+        document.getElementById('zoom-val').innerText = Math.round(state.zoom * 100) + '%';
+        // Apply transform to the wrapper div
+        document.getElementById('zoom-container').style.transform = `scale(${state.zoom})`;
+    }
+
+    function updateCurrentColor(hex) {
+        state.currentColor = hex;
+    }
+
+    function drawGrid() {
+        layerGrid.innerHTML = '';
+        const { width, height, grid } = state.board;
+        
+        // SVG pattern would be more efficient, but lines are easier to export to CAD later if needed
+        for (let x = 0; x <= width; x += grid) {
+            const line = createSVGElement('line', {
+                x1: x, y1: 0, x2: x, y2: height,
+                class: 'grid-line'
+            });
+            layerGrid.appendChild(line);
+        }
+        for (let y = 0; y <= height; y += grid) {
+            const line = createSVGElement('line', {
+                x1: 0, y1: y, x2: width, y2: y,
+                class: 'grid-line'
+            });
+            layerGrid.appendChild(line);
+        }
+    }
+
+    function render() {
+        // Clear dynamic layers
+        layerNails.innerHTML = '';
+        layerStrings.innerHTML = '';
+
+        // 1. Render Strings
+        state.strings.forEach(str => {
+            const start = state.nails.find(n => n.id === str.from);
+            const end = state.nails.find(n => n.id === str.to);
+            if(start && end) {
+                const line = createSVGElement('line', {
+                    x1: start.x, y1: start.y,
+                    x2: end.x, y2: end.y,
+                    stroke: str.color,
+                    'stroke-width': 0.8,
+                    class: 'string-line',
+                    'data-id': str.id
+                });
+                // Handle deletion click specifically on the line
+                line.addEventListener('click', (e) => {
+                    e.stopPropagation(); // prevent board click
+                    if (state.tool === 'delete') {
+                        state.strings = state.strings.filter(s => s.id !== str.id);
+                        render();
+                    }
+                });
+                layerStrings.appendChild(line);
+            }
+        });
+
+        // 2. Render Nails
+        state.nails.forEach(nail => {
+            const circle = createSVGElement('circle', {
+                cx: nail.x, cy: nail.y, r: 1.5,
+                class: 'nail',
+                'data-id': nail.id
+            });
+            
+            // Interaction for nails
+            circle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handleNailInteraction(nail);
+            });
+
+            layerNails.appendChild(circle);
+        });
+
+        updateYarnLegend();
+    }
+
+    function updateYarnLegend() {
+        // Group strings by color
+        const counts = {};
+        state.strings.forEach(s => {
+            if(!counts[s.color]) counts[s.color] = 0;
+            counts[s.color]++;
+        });
+
+        yarnList.innerHTML = '';
+        const colors = Object.keys(counts);
+
+        if(colors.length === 0) {
+            yarnList.innerHTML = '<li style="padding:10px; font-size:0.8em; color:#777; text-align:center;">Keine Fäden vorhanden.</li>';
+            return;
+        }
+
+        colors.forEach(color => {
+            const li = document.createElement('li');
+            li.className = 'yarn-item';
+            li.onclick = () => {
+                // Set this color as active
+                document.getElementById('stringColor').value = color;
+                state.currentColor = color;
+                setTool('string');
+            };
+            
+            li.innerHTML = `
+                <div class="yarn-color-box" style="background-color: ${color}"></div>
+                <span>${color}</span>
+                <span class="yarn-count">${counts[color]} x</span>
+            `;
+            yarnList.appendChild(li);
+        });
+    }
+
+    // --- Tools & Interaction ---
+
+    function setTool(toolName) {
+        state.tool = toolName;
+        state.activeStringStart = null;
+        layerPreviewLines.innerHTML = '';
+        layerGhost.innerHTML = '';
+        
+        document.querySelectorAll('.tools button').forEach(b => b.classList.remove('active'));
+        document.getElementById(`btn-${toolName}`).classList.add('active');
+        
+        const hint = document.getElementById('hint-text');
+        const colorPicker = document.getElementById('color-picker-container');
+
+        colorPicker.style.display = (toolName === 'string') ? 'block' : 'none';
+
+        if (toolName === 'nail') hint.textContent = "Klicke irgendwo, der Nagel schnappt zum nächsten Gitterpunkt.";
+        else if (toolName === 'string') hint.textContent = "Klicke Nägel nacheinander an, um Fäden zu spannen.";
+        else if (toolName === 'delete') hint.textContent = "Klicke auf Nägel oder Fäden zum Löschen.";
+    }
+
+    // Coordinates Calculation considering Zoom and Scale
+    function getMousePosInMM(e) {
+        // We use getBoundingClientRect on the canvas itself, which is inside the transformed container.
+        // The rect values are already scaled by the CSS transform (zoom).
+        const rect = canvas.getBoundingClientRect();
+        
+        // Calculate relative pos in pixels (screen space)
+        const xPixel = e.clientX - rect.left;
+        const yPixel = e.clientY - rect.top;
+
+        // Convert to percentage of the canvas, then to MM
+        // rect.width is the visual width (including zoom)
+        const xMM = (xPixel / rect.width) * state.board.width;
+        const yMM = (yPixel / rect.height) * state.board.height;
+
+        return { x: xMM, y: yMM };
+    }
+
+    function getSnapPos(pos) {
+        const g = state.board.grid;
+        // Simple rounding finds the nearest integer multiple of grid size
+        return {
+            x: Math.round(pos.x / g) * g,
+            y: Math.round(pos.y / g) * g
+        };
+    }
+
+    // Event: Moving Mouse (Ghost Nail & String Preview)
+    function handleMouseMove(e) {
+        const rawPos = getMousePosInMM(e);
+        const snapPos = getSnapPos(rawPos);
+
+        layerGhost.innerHTML = '';
+        layerPreviewLines.innerHTML = '';
+
+        // 1. Ghost Nail (Show where click will land)
+        if (state.tool === 'nail') {
+            // Check boundaries
+            if(snapPos.x >= 0 && snapPos.x <= state.board.width && 
+               snapPos.y >= 0 && snapPos.y <= state.board.height) {
+                
+                // Check if nail exists already
+                const exists = state.nails.some(n => n.x === snapPos.x && n.y === snapPos.y);
+                
+                const ghost = createSVGElement('circle', {
+                    cx: snapPos.x, cy: snapPos.y, r: exists ? 2 : 1.5,
+                    fill: exists ? '#f44336' : 'rgba(255,255,255,0.7)', // Red if occupied
+                    stroke: 'none',
+                    opacity: 0.8,
+                    'pointer-events': 'none' // Click passes through to board
+                });
+                layerGhost.appendChild(ghost);
+            }
+        }
+
+        // 2. String Preview
+        if (state.tool === 'string' && state.activeStringStart !== null) {
+            const startNail = state.nails.find(n => n.id === state.activeStringStart);
+            if (startNail) {
+                const line = createSVGElement('line', {
+                    x1: startNail.x, y1: startNail.y,
+                    x2: rawPos.x, y2: rawPos.y, // Follow mouse loosely
+                    stroke: state.currentColor,
+                    'stroke-width': 0.8,
+                    class: 'preview-line'
+                });
+                layerPreviewLines.appendChild(line);
+            }
+        }
+    }
+
+    // Event: Click on Board (Background)
+    function handleBoardClick(e) {
+        // If we clicked a nail or string directly, their listeners handled it and stopped propagation.
+        // So this is only for empty space.
+        
+        if (state.tool === 'nail') {
+            const snapPos = getSnapPos(getMousePosInMM(e));
+            
+            // Bounds check
+            if(snapPos.x < 0 || snapPos.x > state.board.width || snapPos.y < 0 || snapPos.y > state.board.height) return;
+
+            // Duplicate check
+            const exists = state.nails.some(n => n.x === snapPos.x && n.y === snapPos.y);
+            if (!exists) {
+                state.nails.push({ id: state.nailIdCounter++, x: snapPos.x, y: snapPos.y });
+                render();
+                // Refresh ghost immediately
+                handleMouseMove(e);
+            }
+        } else if (state.tool === 'string') {
+            // Clicking on empty space while stringing usually cancels the active string
+            state.activeStringStart = null;
+            layerPreviewLines.innerHTML = '';
+        }
+    }
+
+    // Event: Click on specific Nail
+    function handleNailInteraction(nail) {
+        if (state.tool === 'delete') {
+            // Remove nail and attached strings
+            state.nails = state.nails.filter(n => n.id !== nail.id);
+            state.strings = state.strings.filter(s => s.from !== nail.id && s.to !== nail.id);
+            // If we were dragging from this nail, stop
+            if(state.activeStringStart === nail.id) state.activeStringStart = null;
+            render();
+            return;
+        }
+
+        if (state.tool === 'string') {
+            if (state.activeStringStart === null) {
+                // Start
+                state.activeStringStart = nail.id;
+            } else {
+                // End (or Continue)
+                if (state.activeStringStart !== nail.id) {
+                    state.strings.push({
+                        id: state.stringIdCounter++,
+                        from: state.activeStringStart,
+                        to: nail.id,
+                        color: state.currentColor
+                    });
+                    
+                    // "Polyline" mode: end becomes new start
+                    state.activeStringStart = nail.id; 
+                    render();
+                } else {
+                    // Clicked same nail twice -> Finish line (deselect)
+                    state.activeStringStart = null;
+                    layerPreviewLines.innerHTML = '';
+                }
+            }
+        }
+    }
+
+    // --- Helpers ---
+    function createSVGElement(tag, attrs) {
+        const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+        for (const [key, val] of Object.entries(attrs)) {
+            el.setAttribute(key, val);
+        }
+        return el;
+    }
+
+    // --- Persistence & Export ---
+
+    function saveProject() {
+        const json = JSON.stringify(state);
+        const blob = new Blob([json], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `stringart_${Date.now()}.json`;
+        a.click();
+    }
+
+    function loadProject(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const loaded = JSON.parse(e.target.result);
+                // Simple merge
+                state.board = loaded.board || state.board;
+                state.nails = loaded.nails || [];
+                state.strings = loaded.strings || [];
+                state.nailIdCounter = loaded.nailIdCounter || (state.nails.length ? Math.max(...state.nails.map(n=>n.id))+1 : 1);
+                state.stringIdCounter = loaded.stringIdCounter || 1;
+                state.currentColor = loaded.currentColor || '#ff0000';
+                
+                // Reset View
+                document.getElementById('boardWidth').value = state.board.width;
+                document.getElementById('boardHeight').value = state.board.height;
+                document.getElementById('gridSize').value = state.board.grid;
+                document.getElementById('stringColor').value = state.currentColor;
+                
+                updateBoardSettings();
+                render();
+            } catch (err) {
+                console.error(err);
+                alert("Datei ist beschädigt oder ungültiges Format.");
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function exportSVG() {
+        // Clone canvas to remove helper layers before export
+        const clone = canvas.cloneNode(true);
+        const ghost = clone.getElementById('layer-ghost');
+        const preview = clone.getElementById('layer-preview-lines');
+        if(ghost) ghost.remove();
+        if(preview) preview.remove();
+
+        const svgData = new XMLSerializer().serializeToString(clone);
+        const blob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'stringart_export.svg';
+        a.click();
+    }
+
+    function generatePlan() {
+        const modal = document.getElementById('plan-modal');
+        const content = document.getElementById('plan-text');
+        
+        // Sorting for easier human reading (top-left to bottom-right)
+        const sortedNails = [...state.nails].sort((a,b) => (a.y - b.y) || (a.x - b.x));
+        const idMap = {};
+        sortedNails.forEach((n, idx) => idMap[n.id] = idx + 1);
+
+        let text = `STRING ART BAUPLAN\n`;
+        text += `==================\n\n`;
+        
+        text += `TEIL 1: MATERIAL\n`;
+        text += `- Holzbrett: ${state.board.width}mm x ${state.board.height}mm\n`;
+        text += `- Nägel: ${state.nails.length} Stück\n`;
+        // Count colors
+        const colors = [...new Set(state.strings.map(s => s.color))];
+        text += `- Garne: ${colors.length} Farben (${colors.join(', ')})\n\n`;
+
+        text += `TEIL 2: NÄGEL POSITIONEN (X / Y in mm)\n`;
+        text += `(Nullpunkt ist oben links)\n`;
+        text += `--------------------------------------\n`;
+        text += `Nr.\tX\tY\n`;
+        sortedNails.forEach(n => {
+            text += `${idMap[n.id]}\t${n.x}\t${n.y}\n`;
+        });
+
+        text += `\nTEIL 3: FÄDEL-ANLEITUNG\n`;
+        text += `-----------------------\n`;
+        
+        colors.forEach(color => {
+            text += `\n[FARBE: ${color}]\n`;
+            const lines = state.strings.filter(s => s.color === color);
+            
+            // Try to find continuous paths for easier reading
+            // This is a simple list. A pathfinder algorithm would be complex, 
+            // so we list connections line by line but denote them clearly.
+            lines.forEach((l, i) => {
+                const start = idMap[l.from];
+                const end = idMap[l.to];
+                text += `${i+1}.\tNagel ${start}  -->  Nagel ${end}\n`;
+            });
+        });
+
+        content.innerText = text;
+        modal.style.display = 'flex';
+    }
+    
+    function copyPlan() {
+        const text = document.getElementById('plan-text').innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            alert("Plan in Zwischenablage kopiert!");
+        });
+    }
+
+    // Start
+    init();
+
+</script>
+</body>
+</html>
